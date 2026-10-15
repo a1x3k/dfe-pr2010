@@ -21,7 +21,6 @@ name: Python application
 on:
   # Every push to main (including merged PRs).
   push:
-    branches: [ "main" ]
   # Every PR that targets main, and every new commit pushed to that PR.
   pull_request:
     branches: [ "main" ]
