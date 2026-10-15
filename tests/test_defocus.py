@@ -105,7 +105,9 @@ class TestMattingLaplacian:
     def test_window_neighbours_only(self):
         # pixels further apart than one window (2r + 1) have no affinity
         laplacian = matting_laplacian(np.random.default_rng(1).random((6, 6, 3))).toarray()
-        idx = lambda j, i: j * 6 + i
+        def idx(j, i):
+            return j * 6 + i
+
         assert laplacian[idx(0, 0), idx(0, 2)] != 0
         assert laplacian[idx(0, 0), idx(0, 3)] == 0
         assert laplacian[idx(0, 0), idx(3, 0)] == 0

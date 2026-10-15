@@ -23,4 +23,14 @@ testpaths = ["tests"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "ruff>=0.17.1",
 ]
+
+[tool.ruff]
+line-length = 127
+# Let import sorting treat src/ packages and tests/conftest.py as first-party.
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/F: pycodestyle errors and pyflakes (what flake8 checked); I: import sorting.
+select = ["E", "F", "I"]

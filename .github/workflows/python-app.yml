@@ -1,39 +1,89 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+# =============================================================================
+# GitHub Actions workflow: lint and test this project on every push / PR.
+#
+# How GitHub Actions works, in one paragraph:
+#   Any YAML file inside .github/workflows/ is a "workflow". It says WHEN to run
+#   (triggers, under `on:`) and WHAT to run (`jobs:`, each made of `steps:`).
+#   For every run GitHub boots a fresh, empty virtual machine, executes the
+#   steps in order, and reports a green check or red X on the commit / PR.
+#   If any command exits with a non-zero code, its step fails, the job fails,
+#   and the run is marked red. Logs are in the repo's "Actions" tab.
+#
+# Docs: https://docs.github.com/en/actions
+# =============================================================================
 
+# Display name shown in the Actions tab. Purely cosmetic.
 name: Python application
 
+# -----------------------------------------------------------------------------
+# Triggers: when should this workflow run?
+# -----------------------------------------------------------------------------
 on:
+  # Every push to main (including merged PRs).
   push:
     branches: [ "main" ]
+  # Every PR that targets main, and every new commit pushed to that PR.
   pull_request:
     branches: [ "main" ]
+  # Adds a manual "Run workflow" button in the Actions tab.
+  workflow_dispatch:
 
+# -----------------------------------------------------------------------------
+# Permissions of the automatic GITHUB_TOKEN given to each run.
+# A test job only needs to read the code, so we grant nothing more
+# (principle of least privilege: a compromised step can't push or edit issues).
+# -----------------------------------------------------------------------------
 permissions:
   contents: read
 
+# -----------------------------------------------------------------------------
+# Jobs: independent units of work. Multiple jobs run in parallel by default.
+# -----------------------------------------------------------------------------
 jobs:
+  # "build" is just an ID we choose; it appears in the UI.
   build:
-
+    # Operating system of the virtual machine (other options: windows-latest,
+    # macos-latest).
     runs-on: ubuntu-latest
 
+    # Steps run top to bottom on the same machine, sharing its filesystem.
+    # Two kinds of step:
+    #   uses: owner/repo@version  -> run a reusable, pre-built "action"
+    #   run:  <shell commands>    -> run commands in bash
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.13
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.13"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 pytest
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
-      run: |
-        pytest
+      # 1) The VM starts empty, so first clone this repository into it.
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # 2) Install uv, the tool this project uses (pyproject.toml + uv.lock).
+      #    `with:` passes inputs to the action, like function arguments.
+      #    Setting python-version makes uv provide Python 3.13 for the project.
+      - name: Set up uv and Python 3.13
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      # 3) Create .venv and install the package plus all dependencies at the
+      #    exact versions pinned in uv.lock, so CI matches local development.
+      #    The "dev" dependency group (pytest, ruff) is included by default.
+      #    --locked fails the build if uv.lock is out of date with
+      #    pyproject.toml, which catches "forgot to commit the lock file".
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # 4) Lint with ruff, a fast linter that replaces flake8 and isort.
+      #    `uv run` uses the ruff version pinned in uv.lock, so CI and your
+      #    machine report the same results. The rules to check live in
+      #    [tool.ruff] in pyproject.toml: E/F (pycodestyle + pyflakes, what
+      #    flake8 checked) and I (import sorting), with 127-char lines
+      #    (the width of GitHub's code viewer).
+      #    ruff skips .venv and files ignored by .gitignore on its own.
+      #    Any violation fails the build. Fix locally with `uv run ruff check --fix`.
+      - name: Lint with ruff
+        run: uv run ruff check .
+
+      # 5) Run the test suite inside the project's environment.
+      #    pytest finds tests via [tool.pytest.ini_options] in pyproject.toml.
+      #    A failing test -> non-zero exit code -> red X on the commit / PR.
+      - name: Test with pytest
+        run: uv run pytest
